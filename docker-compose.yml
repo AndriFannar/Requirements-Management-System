@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres
+    environment:
+      POSTGRES_DB: requirements_db
+      POSTGRES_USER: requirements
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lin/postgresql/data
+
+volumes:
+  postgres_data:
