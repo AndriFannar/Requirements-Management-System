@@ -1,0 +1,56 @@
+name: Promote feature to dev
+
+on:
+  push:
+    tags:
+      - "feat-*-dev"
+
+permissions:
+  contents: write
+  pull-request: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract branch & tag info
+        id: info
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "tag=${tag}" >> $GITHUB_OUTPUT
+
+          BRANCH=$(git branch -r --contains "$GITHUB_SHA" | sed 's|origin/||' | grep '^feature/' | head -n1 || true)
+
+          if [ -z "$BRANCH" ]; THEN
+            echo "No new feature branch found for commit $GITHUB_SHA"
+            exit 1
+          fi
+
+          echo "branch=${BRANCH}" >> $GITHUB_OUTPUT
+          echo "Feature branch: $BRANCH"
+
+      - name: Create PR from feature to dev
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ steps.info.outputs.branch }}"
+          TAG="${{ steps.info.outputs.tag }}"
+
+          TITLE="Promote ${BRANCH} to dev (${tag})"
+          BODY="Automated promotion of \`${BRANCH}\` to \`dev\` for tag \`${tag}\`."
+
+          if gh pr list --head "$BRANCH" --base "dev" --state open --json number --jq '.[0].number' | grep -qE '^[0-9]+$'; THEN
+            echo "PR from ${BRANCH} to dev already exists."
+          else
+            gh pr create \
+              --head "$BRANCH" \
+              --base "dev" \
+              --title "$TITLE" \
+              --body "$BODY"
+          fi
