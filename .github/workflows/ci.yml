@@ -1,7 +1,7 @@
 name: CI
 
 on:
-  pull_requests:
+  pull_request:
     branches:
       - dev
       - test
@@ -28,8 +28,8 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '25'
-          distribution: 'temurin'
-      
+          java-version: "25"
+          distribution: "temurin"
+
       - name: Build with Maven
         run: mvn -B verify
