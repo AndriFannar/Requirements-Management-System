@@ -27,7 +27,7 @@ jobs:
 
           BRANCH=$(git branch -r --contains "$GITHUB_SHA" | sed 's|origin/||' | grep '^feature/' | head -n1 || true)
 
-          if [ -z "$BRANCH" ]; THEN
+          if [ -z "$BRANCH" ]; then
             echo "No new feature branch found for commit $GITHUB_SHA"
             exit 1
           fi
@@ -45,7 +45,7 @@ jobs:
           TITLE="Promote ${BRANCH} to dev (${tag})"
           BODY="Automated promotion of \`${BRANCH}\` to \`dev\` for tag \`${tag}\`."
 
-          if gh pr list --head "$BRANCH" --base "dev" --state open --json number --jq '.[0].number' | grep -qE '^[0-9]+$'; THEN
+          if gh pr list --head "$BRANCH" --base "dev" --state open --json number --jq '.[0].number' | grep -qE '^[0-9]+$'; then
             echo "PR from ${BRANCH} to dev already exists."
           else
             gh pr create \

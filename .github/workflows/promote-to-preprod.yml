@@ -27,7 +27,7 @@ jobs:
 
           BRANCH=$(git branch -r --contains "$GITHUB_SHA" | sed 's|origin/||' | grep '^feature/' | head -n1 || true)
 
-          if [ -z "$BRANCH" ]; THEN
+          if [ -z "$BRANCH" ]; then
             echo "No new feature branch found for commit $GITHUB_SHA"
             exit 1
           fi
@@ -38,7 +38,7 @@ jobs:
       - name: Ensure tag commit is on test
         run: |
           git fetch origin test
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/test; THEN
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/test; then
             echo "Tag commit $GITHUB_SHA is not reachable from origin/test. Aborting promotion."
             exit 1
           fi
@@ -54,7 +54,7 @@ jobs:
           TITLE="Promote ${BRANCH} to preprod (${tag})"
           BODY="Automated promotion of \`${BRANCH}\` to \`preprod\` for tag \`${tag}\`."
 
-          if gh pr list --head "$BRANCH" --base "preprod" --state open --json number --jq '.[0].number' | grep -qE '^[0-9]+$'; THEN
+          if gh pr list --head "$BRANCH" --base "preprod" --state open --json number --jq '.[0].number' | grep -qE '^[0-9]+$'; then
             echo "PR from ${BRANCH} to preprod already exists."
           else
             gh pr create \
