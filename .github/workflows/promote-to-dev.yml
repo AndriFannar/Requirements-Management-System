@@ -24,6 +24,11 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME}"
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Tag is: $TAG"
+          echo "Commit is: $GITHUB_SHA"
+
+          echo "Remote branches containing this commit:"
+          git branch -r --contains "$GITHUB_SHA" || true
 
           BRANCH=$(git branch -r --contains "$GITHUB_SHA" | sed 's|origin/||' | grep '^feature/' | head -n1 || true)
 
