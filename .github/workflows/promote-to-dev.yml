@@ -3,7 +3,7 @@ name: Promote feature to dev
 on:
   push:
     tags:
-      - "feat-*-dev"
+      - "feat-*-dev*"
 
 permissions:
   contents: write

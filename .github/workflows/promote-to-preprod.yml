@@ -3,7 +3,7 @@ name: Promote feature to preprod
 on:
   push:
     tags:
-      - "feat-*-preprod"
+      - "feat-*-preprod*"
 
 permissions:
   contents: write
