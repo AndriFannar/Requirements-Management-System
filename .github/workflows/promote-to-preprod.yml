@@ -60,8 +60,8 @@ jobs:
           BRANCH="${{ steps.info.outputs.branch }}"
           TAG="${{ steps.info.outputs.tag }}"
 
-          TITLE="Promote ${BRANCH} to preprod (${tag})"
-          BODY="Automated promotion of \`${BRANCH}\` to \`preprod\` for tag \`${tag}\`."
+          TITLE="Promote ${BRANCH} to preprod (${TAG})"
+          BODY="Automated promotion of \`${BRANCH}\` to \`preprod\` for tag \`${TAG}\`."
 
           if gh pr list --head "$BRANCH" --base "preprod" --state open --json number --jq '.[0].number' | grep -qE '^[0-9]+$'; then
             echo "PR from ${BRANCH} to preprod already exists."
