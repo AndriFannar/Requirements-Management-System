@@ -23,11 +23,20 @@ jobs:
         id: info
         run: |
           TAG="${GITHUB_REF_NAME}"
-          echo "tag=${tag}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Tag is: $TAG"
+          echo "Commit is: $GITHUB_SHA"
 
-          BRANCH=$(git branch -r --contains "$GITHUB_SHA" | sed 's|origin/||' | grep '^feature/' | head -n1 || true)
+          echo "Remote branches containing this commit:"
+          git branch -r --contains "$GITHUB_SHA" || true
 
-          if [ -z "$BRANCH" ]; THEN
+          BRANCH=$(git branch -r --contains "$GITHUB_SHA" \
+            | sed 's|origin/||' \
+            | sed 's/^[[:space:]]*//' \
+            | grep '^feature/' \
+            | head -n1 || true)
+
+          if [ -z "$BRANCH" ]; then
             echo "No new feature branch found for commit $GITHUB_SHA"
             exit 1
           fi
@@ -42,10 +51,10 @@ jobs:
           BRANCH="${{ steps.info.outputs.branch }}"
           TAG="${{ steps.info.outputs.tag }}"
 
-          TITLE="Promote ${BRANCH} to dev (${tag})"
-          BODY="Automated promotion of \`${BRANCH}\` to \`dev\` for tag \`${tag}\`."
+          TITLE="Promote ${BRANCH} to dev (${TAG})"
+          BODY="Automated promotion of \`${BRANCH}\` to \`dev\` for tag \`${TAG}\`."
 
-          if gh pr list --head "$BRANCH" --base "dev" --state open --json number --jq '.[0].number' | grep -qE '^[0-9]+$'; THEN
+          if gh pr list --head "$BRANCH" --base "dev" --state open --json number --jq '.[0].number' | grep -qE '^[0-9]+$'; then
             echo "PR from ${BRANCH} to dev already exists."
           else
             gh pr create \
