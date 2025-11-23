@@ -1,0 +1,247 @@
+name: Aggregate Changelog for Pre-release
+
+on:
+  push:
+    tags:
+      - 'v*-rc*'
+
+permissions:
+  contents: write
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_CHANGELOG }}
+          fetch-depth: 0
+          ref: preprod
+
+      - name: Ensure tag is on preprod
+        run: |
+          git fetch origin preprod
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/preprod; then
+            echo "❌ Tag ${{ github.ref_name }} must be on preprod branch"
+            exit 1
+          fi
+          echo "✅ Tag is on preprod branch"
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Pre-release version: ${TAG}"
+
+      - name: Collect and organize feature changelogs
+        id: aggregate
+        run: |
+          VERSION="${{ steps.version.outputs.tag }}"
+          
+          # Create temporary files for each section
+          TEMP_DIR=$(mktemp -d)
+          ADDED="${TEMP_DIR}/added.txt"
+          CHANGED="${TEMP_DIR}/changed.txt"
+          FIXED="${TEMP_DIR}/fixed.txt"
+          REMOVED="${TEMP_DIR}/removed.txt"
+          DEPRECATED="${TEMP_DIR}/deprecated.txt"
+          SECURITY="${TEMP_DIR}/security.txt"
+          TECHNICAL="${TEMP_DIR}/technical.txt"
+          
+          touch "$ADDED" "$CHANGED" "$FIXED" "$REMOVED" "$DEPRECATED" "$SECURITY" "$TECHNICAL"
+          
+          echo "Collecting changelogs from changelogs/feat-*.md files..."
+          
+          # Process each feature changelog
+          FEATURE_COUNT=0
+          for file in changelogs/feat-*.md; do
+            if [ -f "$file" ]; then
+              FEATURE_COUNT=$((FEATURE_COUNT + 1))
+              FEATURE_NAME=$(basename "$file" .md)
+              echo "Processing: ${file}"
+              
+              CURRENT_SECTION=""
+              
+              # Read file line by line
+              while IFS= read -r line; do
+                # Skip comments and empty lines at the start
+                if [[ "$line" =~ ^[[:space:]]*$ ]] || [[ "$line" =~ ^\<\!-- ]]; then
+                  continue
+                fi
+                
+                # Detect section headers
+                if [[ "$line" =~ ^###[[:space:]]*(Added|Changed|Fixed|Removed|Deprecated|Security) ]]; then
+                  CURRENT_SECTION="${BASH_REMATCH[1]}"
+                  continue
+                fi
+                
+                # Special handling for Technical Notes
+                if [[ "$line" =~ ^###[[:space:]]*Technical[[:space:]]*Notes ]]; then
+                  CURRENT_SECTION="Technical"
+                  continue
+                fi
+                
+                # Collect bullet points with feature attribution
+                if [[ "$line" =~ ^-[[:space:]]+ ]] && [[ -n "$CURRENT_SECTION" ]]; then
+                  # Add feature name attribution
+                  ATTRIBUTED_LINE="${line} *(${FEATURE_NAME})*"
+                  
+                  case "$CURRENT_SECTION" in
+                    "Added")
+                      echo "$ATTRIBUTED_LINE" >> "$ADDED"
+                      ;;
+                    "Changed")
+                      echo "$ATTRIBUTED_LINE" >> "$CHANGED"
+                      ;;
+                    "Fixed")
+                      echo "$ATTRIBUTED_LINE" >> "$FIXED"
+                      ;;
+                    "Removed")
+                      echo "$ATTRIBUTED_LINE" >> "$REMOVED"
+                      ;;
+                    "Deprecated")
+                      echo "$ATTRIBUTED_LINE" >> "$DEPRECATED"
+                      ;;
+                    "Security")
+                      echo "$ATTRIBUTED_LINE" >> "$SECURITY"
+                      ;;
+                    "Technical")
+                      echo "$ATTRIBUTED_LINE" >> "$TECHNICAL"
+                      ;;
+                  esac
+                fi
+              done < "$file"
+            fi
+          done
+          
+          if [ $FEATURE_COUNT -eq 0 ]; then
+            echo "⚠️  No feature changelogs found! This might be intentional for a hotfix."
+          else
+            echo "✅ Processed ${FEATURE_COUNT} feature changelog(s)"
+          fi
+          
+          # Build the aggregated changelog section
+          AGGREGATED="${TEMP_DIR}/aggregated.txt"
+          echo "## ${VERSION}" > "$AGGREGATED"
+          echo "" >> "$AGGREGATED"
+          
+          # Add each section if it has content
+          if [ -s "$ADDED" ]; then
+            echo "### Added" >> "$AGGREGATED"
+            cat "$ADDED" >> "$AGGREGATED"
+            echo "" >> "$AGGREGATED"
+          fi
+          
+          if [ -s "$CHANGED" ]; then
+            echo "### Changed" >> "$AGGREGATED"
+            cat "$CHANGED" >> "$AGGREGATED"
+            echo "" >> "$AGGREGATED"
+          fi
+          
+          if [ -s "$FIXED" ]; then
+            echo "### Fixed" >> "$AGGREGATED"
+            cat "$FIXED" >> "$AGGREGATED"
+            echo "" >> "$AGGREGATED"
+          fi
+          
+          if [ -s "$REMOVED" ]; then
+            echo "### Removed" >> "$AGGREGATED"
+            cat "$REMOVED" >> "$AGGREGATED"
+            echo "" >> "$AGGREGATED"
+          fi
+          
+          if [ -s "$DEPRECATED" ]; then
+            echo "### Deprecated" >> "$AGGREGATED"
+            cat "$DEPRECATED" >> "$AGGREGATED"
+            echo "" >> "$AGGREGATED"
+          fi
+          
+          if [ -s "$SECURITY" ]; then
+            echo "### Security" >> "$AGGREGATED"
+            cat "$SECURITY" >> "$AGGREGATED"
+            echo "" >> "$AGGREGATED"
+          fi
+          
+          if [ -s "$TECHNICAL" ]; then
+            echo "### Technical Notes" >> "$AGGREGATED"
+            cat "$TECHNICAL" >> "$AGGREGATED"
+            echo "" >> "$AGGREGATED"
+          fi
+          
+          # Prepend to existing CHANGELOG.md or create new
+          if [ -f CHANGELOG.md ]; then
+            # Check if this version already exists
+            if grep -q "^## ${VERSION}" CHANGELOG.md; then
+              echo "⚠️  Version ${VERSION} already exists in CHANGELOG.md"
+              echo "Replacing existing entry..."
+              
+              # Remove old entry and insert new one
+              # This is a simplified approach - in production you might want more sophisticated handling
+              sed -i "/^## ${VERSION}/,/^## /{ /^## ${VERSION}/d; /^## /!d; }" CHANGELOG.md
+            fi
+            
+            # Insert after "# Changelog" header
+            TEMP_CHANGELOG="${TEMP_DIR}/new_changelog.md"
+            head -n 2 CHANGELOG.md > "$TEMP_CHANGELOG"  # Keep header and empty line
+            cat "$AGGREGATED" >> "$TEMP_CHANGELOG"
+            echo "" >> "$TEMP_CHANGELOG"
+            tail -n +3 CHANGELOG.md >> "$TEMP_CHANGELOG"
+            mv "$TEMP_CHANGELOG" CHANGELOG.md
+          else
+            echo "# Changelog" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            cat "$AGGREGATED" >> CHANGELOG.md
+          fi
+          
+          rm -rf "$TEMP_DIR"
+          
+          echo "✅ Changelog aggregated successfully"
+          echo ""
+          echo "Preview of new CHANGELOG.md:"
+          head -n 50 CHANGELOG.md
+
+      - name: Commit updated CHANGELOG.md
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if git diff --quiet CHANGELOG.md; then
+            echo "No changes to CHANGELOG.md"
+          else
+            git add CHANGELOG.md
+            git commit -m "chore: aggregate changelog for ${{ steps.version.outputs.tag }}"
+            git push origin preprod
+            echo "✅ CHANGELOG.md updated and pushed"
+          fi
+
+      - name: Extract changelog for release body
+        id: extract
+        run: |
+          VERSION="${{ steps.version.outputs.tag }}"
+          
+          # Extract just this version's section from CHANGELOG.md
+          TEMP_FILE=$(mktemp)
+          
+          awk "/^## ${VERSION}/,/^## / {
+            if (/^## / && !/^## ${VERSION}/) exit;
+            if (!/^## ${VERSION}/) print;
+          }" CHANGELOG.md > "$TEMP_FILE"
+          
+          echo "Release body preview:"
+          cat "$TEMP_FILE"
+          
+          echo "body_file=${TEMP_FILE}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "Pre-release ${{ steps.version.outputs.tag }}"
+          prerelease: true
+          body_path: ${{ steps.extract.outputs.body_file }}
+          generate_release_notes: true
+          append_body: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
