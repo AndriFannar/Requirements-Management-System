@@ -7,12 +7,11 @@ on:
 
 permissions:
   contents: write
-  pull-request: write
+  pull-requests: write
 
 jobs:
   promote:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,26 +22,48 @@ jobs:
         id: info
         run: |
           TAG="${GITHUB_REF_NAME}"
-          echo "tag=${tag}" >> $GITHUB_OUTPUT
-
-          BRANCH=$(git branch -r --contains "$GITHUB_SHA" | sed 's|origin/||' | grep '^feature/' | head -n1 || true)
-
-          if [ -z "$BRANCH" ]; THEN
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Tag is: $TAG"
+          echo "Commit is: $GITHUB_SHA"
+          echo "Remote branches containing this commit:"
+          git branch -r --contains "$GITHUB_SHA" || true
+          BRANCH=$(git branch -r --contains "$GITHUB_SHA" \
+            | sed 's|origin/||' \
+            | sed 's/^[[:space:]]*//' \
+            | grep '^feature/' \
+            | head -n1 || true)
+          if [ -z "$BRANCH" ]; then
             echo "No new feature branch found for commit $GITHUB_SHA"
             exit 1
           fi
-
           echo "branch=${BRANCH}" >> $GITHUB_OUTPUT
           echo "Feature branch: $BRANCH"
 
       - name: Ensure tag commit is on test
         run: |
           git fetch origin test
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/test; THEN
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/test; then
             echo "Tag commit $GITHUB_SHA is not reachable from origin/test. Aborting promotion."
             exit 1
           fi
           echo "Tag commit is on origin/test. Continuing."
+
+      - name: Extract changelog content
+        id: changelog
+        run: |
+          BRANCH="${{ steps.info.outputs.branch }}"
+          # Convert feature/xyz to feat-xyz
+          FEATURE_NAME=$(echo "$BRANCH" | sed 's|feature/|feat-|')
+          CHANGELOG_FILE="changelogs/${FEATURE_NAME}.md"
+
+          if [ -f "$CHANGELOG_FILE" ]; then
+            echo "Found changelog: ${CHANGELOG_FILE}"
+            echo "file=${CHANGELOG_FILE}" >> $GITHUB_OUTPUT
+            echo "has_changelog=true" >> $GITHUB_OUTPUT
+          else
+            echo "No changelog found at ${CHANGELOG_FILE}"
+            echo "has_changelog=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Create PR from feature to preprod
         env:
@@ -50,16 +71,73 @@ jobs:
         run: |
           BRANCH="${{ steps.info.outputs.branch }}"
           TAG="${{ steps.info.outputs.tag }}"
+          TITLE="Promote ${BRANCH} to preprod (${TAG})"
 
-          TITLE="Promote ${BRANCH} to preprod (${tag})"
-          BODY="Automated promotion of \`${BRANCH}\` to \`preprod\` for tag \`${tag}\`."
+          # Create PR body file to avoid bash substitution issues
+          PR_BODY_FILE=$(mktemp)
 
-          if gh pr list --head "$BRANCH" --base "preprod" --state open --json number --jq '.[0].number' | grep -qE '^[0-9]+$'; THEN
-            echo "PR from ${BRANCH} to preprod already exists."
-          else
-            gh pr create \
-              --head "$BRANCH" \
-              --base "preprod" \
-              --title "$TITLE" \
-              --body "$BODY"
-          fi
+          cat > "$PR_BODY_FILE" << 'END_OF_HEADER'
+          ## Automated Promotion to `preprod`
+
+          **Feature:** `BRANCH_PLACEHOLDER`
+          **Tag:** `TAG_PLACEHOLDER`
+          **Previous stages:** Verified on `dev` ✓ and `test` ✓
+
+          ---
+
+          END_OF_HEADER
+                    
+                    # Replace placeholders
+                    sed -i "s|BRANCH_PLACEHOLDER|${BRANCH}|g" "$PR_BODY_FILE"
+                    sed -i "s|TAG_PLACEHOLDER|${TAG}|g" "$PR_BODY_FILE"
+                    
+                    # Add changelog or warning
+                    if [ "${{ steps.changelog.outputs.has_changelog }}" = "true" ]; then
+                      echo "## Changelog" >> "$PR_BODY_FILE"
+                      echo "" >> "$PR_BODY_FILE"
+                      cat "${{ steps.changelog.outputs.file }}" >> "$PR_BODY_FILE"
+                      echo "" >> "$PR_BODY_FILE"
+                      echo "---" >> "$PR_BODY_FILE"
+                      echo "" >> "$PR_BODY_FILE"
+                    else
+                      echo "No changelog found for this feature." >> "$PR_BODY_FILE"
+                      echo "" >> "$PR_BODY_FILE"
+                    fi
+                    
+                    # Add commits section
+                    echo "<details>" >> "$PR_BODY_FILE"
+                    echo "<summary>Commits in this promotion</summary>" >> "$PR_BODY_FILE"
+                    echo "" >> "$PR_BODY_FILE"
+                    
+                    # Get commits between preprod and this branch
+                    git fetch origin preprod 2>/dev/null || true
+                    COMMITS=$(git log origin/preprod..${BRANCH} --oneline --pretty=format:"- %s (%h)" 2>/dev/null || echo "- Unable to fetch commit history")
+                    
+                    if [ -n "$COMMITS" ]; then
+                      echo "$COMMITS" >> "$PR_BODY_FILE"
+                    else
+                      echo "- No commits found (branch may be up to date with preprod)" >> "$PR_BODY_FILE"
+                    fi
+                    
+                    echo "" >> "$PR_BODY_FILE"
+                    echo "</details>" >> "$PR_BODY_FILE"
+                    echo "" >> "$PR_BODY_FILE"
+                    
+                    # Add footer
+                    echo "---" >> "$PR_BODY_FILE"
+                    echo "" >> "$PR_BODY_FILE"
+                    echo "<sub>This PR was automatically created by the promote-to-preprod workflow.</sub>" >> "$PR_BODY_FILE"
+                    
+                    # Check if PR already exists
+                    if gh pr list --head "$BRANCH" --base "preprod" --state open --json number --jq '.[0].number' | grep -qE '^[0-9]+$'; then
+                      echo "PR from ${BRANCH} to preprod already exists."
+                    else
+                      gh pr create \
+                        --head "$BRANCH" \
+                        --base "preprod" \
+                        --title "$TITLE" \
+                        --body-file "$PR_BODY_FILE"
+                    fi
+                    
+                    # Clean up
+                    rm -f "$PR_BODY_FILE"
