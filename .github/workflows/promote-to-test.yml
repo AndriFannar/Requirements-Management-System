@@ -12,7 +12,6 @@ permissions:
 jobs:
   promote:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,21 +25,17 @@ jobs:
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "Tag is: $TAG"
           echo "Commit is: $GITHUB_SHA"
-
           echo "Remote branches containing this commit:"
           git branch -r --contains "$GITHUB_SHA" || true
-
           BRANCH=$(git branch -r --contains "$GITHUB_SHA" \
             | sed 's|origin/||' \
             | sed 's/^[[:space:]]*//' \
             | grep '^feature/' \
             | head -n1 || true)
-
           if [ -z "$BRANCH" ]; then
             echo "No new feature branch found for commit $GITHUB_SHA"
             exit 1
           fi
-
           echo "branch=${BRANCH}" >> $GITHUB_OUTPUT
           echo "Feature branch: $BRANCH"
 
@@ -53,22 +48,69 @@ jobs:
           fi
           echo "Tag commit is on origin/dev. Continuing."
 
+      - name: Extract changelog content
+        id: changelog
+        run: |
+          BRANCH="${{ steps.info.outputs.branch }}"
+          # Convert feature/xyz to feat-xyz
+          FEATURE_NAME=$(echo "$BRANCH" | sed 's|feature/|feat-|')
+          CHANGELOG_FILE="changelogs/${FEATURE_NAME}.md"
+
+          if [ -f "$CHANGELOG_FILE" ]; then
+            echo "Found changelog: ${CHANGELOG_FILE}"
+            CHANGELOG_CONTENT=$(cat "$CHANGELOG_FILE")
+            echo "content<<EOF" >> $GITHUB_OUTPUT
+            echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "has_changelog=true" >> $GITHUB_OUTPUT
+          else
+            echo "No changelog found at ${CHANGELOG_FILE}"
+            echo "has_changelog=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create PR from feature to test
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BRANCH="${{ steps.info.outputs.branch }}"
           TAG="${{ steps.info.outputs.tag }}"
-
           TITLE="Promote ${BRANCH} to test (${TAG})"
-          BODY="Automated promotion of \`${BRANCH}\` to \`test\` for tag \`${TAG}\`."
 
-          if gh pr list --head "$BRANCH" --base "test" --state open --json number --jq '.[0].number' | grep -qE '^[0-9]+$'; then
-            echo "PR from ${BRANCH} to test already exists."
-          else
-            gh pr create \
-              --head "$BRANCH" \
-              --base "test" \
-              --title "$TITLE" \
-              --body "$BODY"
-          fi
+          # Build PR body with changelog if available
+          BODY="## Automated Promotion to \`test\`
+
+          **Feature:** \`${BRANCH}\`
+          **Tag:** \`${TAG}\`
+          **Previous stage:** Verified on \`dev\` ✓
+
+          ---
+
+          "
+                    
+                    if [ "${{ steps.changelog.outputs.has_changelog }}" = "true" ]; then
+                      BODY="${BODY}
+          ## 📋 Changelog
+
+          ${{ steps.changelog.outputs.content }}
+
+          ---
+
+          "
+                    else
+                      BODY="${BODY}⚠️ No changelog found for this feature.
+
+          "
+                    fi
+                    
+                    BODY="${BODY}
+          <sub>This PR was automatically created by the promote-to-test workflow.</sub>"
+                    
+                    if gh pr list --head "$BRANCH" --base "test" --state open --json number --jq '.[0].number' | grep -qE '^[0-9]+$'; then
+                      echo "PR from ${BRANCH} to test already exists."
+                    else
+                      gh pr create \
+                        --head "$BRANCH" \
+                        --base "test" \
+                        --title "$TITLE" \
+                        --body "$BODY"
+                    fi
