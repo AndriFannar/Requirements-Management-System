@@ -23,9 +23,18 @@ jobs:
         id: info
         run: |
           TAG="${GITHUB_REF_NAME}"
-          echo "tag=${tag}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Tag is: $TAG"
+          echo "Commit is: $GITHUB_SHA"
 
-          BRANCH=$(git branch -r --contains "$GITHUB_SHA" | sed 's|origin/||' | grep '^feature/' | head -n1 || true)
+          echo "Remote branches containing this commit:"
+          git branch -r --contains "$GITHUB_SHA" || true
+
+          BRANCH=$(git branch -r --contains "$GITHUB_SHA" \
+            | sed 's|origin/||' \
+            | sed 's/^[[:space:]]*//' \
+            | grep '^feature/' \
+            | head -n1 || true)
 
           if [ -z "$BRANCH" ]; then
             echo "No new feature branch found for commit $GITHUB_SHA"
