@@ -23,7 +23,7 @@ jobs:
         id: info
         run: |
           TAG="${GITHUB_REF_NAME}"
-          echo "tag=${tag}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
           BRANCH=$(git branch -r --contains "$GITHUB_SHA" | sed 's|origin/||' | grep '^feature/' | head -n1 || true)
 
@@ -42,8 +42,8 @@ jobs:
           BRANCH="${{ steps.info.outputs.branch }}"
           TAG="${{ steps.info.outputs.tag }}"
 
-          TITLE="Promote ${BRANCH} to dev (${tag})"
-          BODY="Automated promotion of \`${BRANCH}\` to \`dev\` for tag \`${tag}\`."
+          TITLE="Promote ${BRANCH} to dev (${TAG})"
+          BODY="Automated promotion of \`${BRANCH}\` to \`dev\` for tag \`${TAG}\`."
 
           if gh pr list --head "$BRANCH" --base "dev" --state open --json number --jq '.[0].number' | grep -qE '^[0-9]+$'; then
             echo "PR from ${BRANCH} to dev already exists."
