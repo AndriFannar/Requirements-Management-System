@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+      - "!v*-rc*"  # Exclude pre-release tags
 
 permissions:
   contents: write
@@ -18,14 +19,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Ensure tag commit is on preprod
+      - name: Ensure tag commit is on main
         run: |
-          git fetch origin preprod
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/preprod; then
-            echo "Tag commit $GITHUB_SHA is not reachable from origin/preprod. Aborting promotion."
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Tag commit $GITHUB_SHA is not reachable from origin/main. Aborting."
             exit 1
           fi
-          echo "Tag commit is on origin/preprod. Continuing."
+          echo "Tag commit is on origin/main. Continuing."
 
       - name: Set up JDK
         uses: actions/setup-java@v4
@@ -43,12 +44,51 @@ jobs:
           echo "jar=$JAR_PATH" >> $GITHUB_OUTPUT
           echo "Using JAR: $JAR_PATH"
 
+      - name: Extract changelog for release
+        id: changelog
+        run: |
+          VERSION="${{ github.ref_name }}"
+          
+          echo "Extracting changelog for ${VERSION}..."
+          
+          # Check if CHANGELOG.md exists
+          if [ ! -f CHANGELOG.md ]; then
+            echo "⚠️  CHANGELOG.md not found, release will only have auto-generated notes"
+            echo "has_changelog=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "CHANGELOG.md found, extracting section for: ## ${VERSION}"
+          
+          # Extract this version's section
+          BODY_FILE=$(mktemp)
+          
+          awk "/^## ${VERSION}/,/^## / {
+            if (/^## / && !/^## ${VERSION}/) exit;
+            if (!/^## ${VERSION}/) print;
+          }" CHANGELOG.md > "$BODY_FILE"
+          
+          if [ -s "$BODY_FILE" ]; then
+            echo "✅ Extracted changelog ($(wc -c < "$BODY_FILE") bytes)"
+            echo "has_changelog=true" >> $GITHUB_OUTPUT
+            echo "body_file=${BODY_FILE}" >> $GITHUB_OUTPUT
+            
+            echo ""
+            echo "Preview:"
+            head -n 20 "$BODY_FILE"
+          else
+            echo "⚠️  No changelog section found for ${VERSION}"
+            echo "has_changelog=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: "Release ${{ github.ref_name }}"
+          body_path: ${{ steps.changelog.outputs.has_changelog == 'true' && steps.changelog.outputs.body_file || '' }}
           generate_release_notes: true
+          append_body: true
           files: |
             ${{ steps.jar.outputs.jar }}
         env:
