@@ -58,10 +58,7 @@ jobs:
 
           if [ -f "$CHANGELOG_FILE" ]; then
             echo "Found changelog: ${CHANGELOG_FILE}"
-            CHANGELOG_CONTENT=$(cat "$CHANGELOG_FILE")
-            echo "content<<EOF" >> $GITHUB_OUTPUT
-            echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+            echo "file=${CHANGELOG_FILE}" >> $GITHUB_OUTPUT
             echo "has_changelog=true" >> $GITHUB_OUTPUT
           else
             echo "No changelog found at ${CHANGELOG_FILE}"
@@ -76,35 +73,41 @@ jobs:
           TAG="${{ steps.info.outputs.tag }}"
           TITLE="Promote ${BRANCH} to preprod (${TAG})"
 
-          # Build PR body with changelog if available
-          BODY="## Automated Promotion to \`preprod\`
+          # Create PR body file to avoid bash substitution issues
+          PR_BODY_FILE=$(mktemp)
 
-          **Feature:** \`${BRANCH}\`
-          **Tag:** \`${TAG}\`
-          **Previous stages:** Verified on \`dev\` ✓ and \`test\` ✓
+          cat > "$PR_BODY_FILE" << 'END_OF_HEADER'
+          ## Automated Promotion to `preprod`
+
+          **Feature:** `BRANCH_PLACEHOLDER`
+          **Tag:** `TAG_PLACEHOLDER`
+          **Previous stages:** Verified on `dev` ✓ and `test` ✓
 
           ---
 
-          "
+          END_OF_HEADER
                     
+                    # Replace placeholders
+                    sed -i "s|BRANCH_PLACEHOLDER|${BRANCH}|g" "$PR_BODY_FILE"
+                    sed -i "s|TAG_PLACEHOLDER|${TAG}|g" "$PR_BODY_FILE"
+                    
+                    # Add changelog or warning
                     if [ "${{ steps.changelog.outputs.has_changelog }}" = "true" ]; then
-                      BODY="${BODY}
-          ## 📋 Changelog
-
-          ${{ steps.changelog.outputs.content }}
-
-          ---
-
-          "
+                      echo "## Changelog" >> "$PR_BODY_FILE"
+                      echo "" >> "$PR_BODY_FILE"
+                      cat "${{ steps.changelog.outputs.file }}" >> "$PR_BODY_FILE"
+                      echo "" >> "$PR_BODY_FILE"
+                      echo "---" >> "$PR_BODY_FILE"
+                      echo "" >> "$PR_BODY_FILE"
                     else
-                      BODY="${BODY}⚠️ No changelog found for this feature.
-
-          "
+                      echo " No changelog found for this feature." >> "$PR_BODY_FILE"
+                      echo "" >> "$PR_BODY_FILE"
                     fi
                     
-                    BODY="${BODY}
-          <sub>This PR was automatically created by the promote-to-preprod workflow.</sub>"
+                    # Add footer
+                    echo "<sub>This PR was automatically created by the promote-to-preprod workflow.</sub>" >> "$PR_BODY_FILE"
                     
+                    # Check if PR already exists
                     if gh pr list --head "$BRANCH" --base "preprod" --state open --json number --jq '.[0].number' | grep -qE '^[0-9]+$'; then
                       echo "PR from ${BRANCH} to preprod already exists."
                     else
@@ -112,5 +115,8 @@ jobs:
                         --head "$BRANCH" \
                         --base "preprod" \
                         --title "$TITLE" \
-                        --body "$BODY"
+                        --body-file "$PR_BODY_FILE"
                     fi
+                    
+                    # Clean up
+                    rm -f "$PR_BODY_FILE"
