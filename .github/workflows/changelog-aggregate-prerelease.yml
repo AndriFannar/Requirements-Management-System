@@ -205,6 +205,9 @@ jobs:
             cat "$AGGREGATED" >> CHANGELOG.md
           fi
           
+          # Save aggregated content to persistent location for release body
+          cp "$AGGREGATED" /tmp/release_body_content.txt
+          
           rm -rf "$TEMP_DIR"
           
           echo "✅ Changelog aggregated successfully"
@@ -231,48 +234,31 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.tag }}"
           
-          echo "Extracting changelog for ${VERSION}..."
-          echo ""
+          echo "Preparing release body for ${VERSION}..."
           
-          # Check if CHANGELOG.md exists
-          if [ ! -f CHANGELOG.md ]; then
-            echo "❌ ERROR: CHANGELOG.md does not exist!"
-            exit 1
-          fi
-          
-          echo "CHANGELOG.md exists, showing first 30 lines:"
-          head -n 30 CHANGELOG.md
-          echo ""
-          
-          # Extract just this version's section from CHANGELOG.md
-          TEMP_FILE=$(mktemp)
-          
-          echo "Extracting section for: ## ${VERSION}"
-          awk "/^## ${VERSION}/,/^## / {
-            if (/^## / && !/^## ${VERSION}/) exit;
-            if (!/^## ${VERSION}/) print;
-          }" CHANGELOG.md > "$TEMP_FILE"
-          
-          echo ""
-          echo "Extracted content (first 50 lines):"
-          head -n 50 "$TEMP_FILE"
-          echo ""
-          
-          # Check if extraction was successful
-          if [ ! -s "$TEMP_FILE" ]; then
-            echo "⚠️  WARNING: Extracted changelog is empty!"
-            echo "This might mean the version section wasn't found in CHANGELOG.md"
+          # Use the aggregated content we saved earlier
+          if [ -f /tmp/release_body_content.txt ]; then
+            echo "✅ Using aggregated changelog content"
             echo ""
-            echo "Creating fallback message..."
-            echo "## ${VERSION}" > "$TEMP_FILE"
-            echo "" >> "$TEMP_FILE"
-            echo "Pre-release version. See CHANGELOG.md in the repository for details." >> "$TEMP_FILE"
+            echo "Content preview:"
+            head -n 30 /tmp/release_body_content.txt
+            echo ""
+            
+            FILE_SIZE=$(wc -c < /tmp/release_body_content.txt)
+            echo "Release body size: ${FILE_SIZE} bytes"
+            
+            echo "body_file=/tmp/release_body_content.txt" >> $GITHUB_OUTPUT
           else
-            FILE_SIZE=$(wc -c < "$TEMP_FILE")
-            echo "✅ Extraction successful (${FILE_SIZE} bytes)"
+            echo "❌ ERROR: Aggregated content not found!"
+            echo "Creating fallback message..."
+            
+            FALLBACK_FILE=$(mktemp)
+            echo "## ${VERSION}" > "$FALLBACK_FILE"
+            echo "" >> "$FALLBACK_FILE"
+            echo "Pre-release version. See CHANGELOG.md in the repository for details." >> "$FALLBACK_FILE"
+            
+            echo "body_file=${FALLBACK_FILE}" >> $GITHUB_OUTPUT
           fi
-          
-          echo "body_file=${TEMP_FILE}" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Pre-release
         uses: softprops/action-gh-release@v2
