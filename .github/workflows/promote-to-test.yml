@@ -3,7 +3,7 @@ name: Promote feature to test
 on:
   push:
     tags:
-      - "feat-*-test"
+      - "feat-*-test*"
 
 permissions:
   contents: write
@@ -13,7 +13,6 @@ jobs:
   promote:
     runs-on: ubuntu-latest
     steps:
-
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -39,7 +38,7 @@ jobs:
           fi
           echo "branch=${BRANCH}" >> $GITHUB_OUTPUT
           echo "Feature branch: $BRANCH"
-      
+
       - name: Ensure tag commit is on dev
         run: |
           git fetch origin dev
@@ -48,7 +47,7 @@ jobs:
             exit 1
           fi
           echo "Tag commit is on origin/dev. Continuing."
-      
+
       - name: Extract changelog content
         id: changelog
         run: |
@@ -56,7 +55,7 @@ jobs:
           # Convert feature/xyz to feat-xyz
           FEATURE_NAME=$(echo "$BRANCH" | sed 's|feature/|feat-|')
           CHANGELOG_FILE="changelogs/${FEATURE_NAME}.md"
-          
+
           if [ -f "$CHANGELOG_FILE" ]; then
             echo "Found changelog: ${CHANGELOG_FILE}"
             echo "file=${CHANGELOG_FILE}" >> $GITHUB_OUTPUT
@@ -65,7 +64,7 @@ jobs:
             echo "No changelog found at ${CHANGELOG_FILE}"
             echo "has_changelog=false" >> $GITHUB_OUTPUT
           fi
-      
+
       - name: Create PR from feature to test
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -73,10 +72,10 @@ jobs:
           BRANCH="${{ steps.info.outputs.branch }}"
           TAG="${{ steps.info.outputs.tag }}"
           TITLE="Promote ${BRANCH} to test (${TAG})"
-          
+
           # Create PR body file to avoid bash substitution issues
           PR_BODY_FILE=$(mktemp)
-          
+
           cat > "$PR_BODY_FILE" << 'END_OF_HEADER'
           ## Automated Promotion to `test`
 

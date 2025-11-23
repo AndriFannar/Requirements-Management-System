@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   create-template:
-    # Only run on branch creation, not tag creation
+    # Only run on feature branch creation, not tag creation
     if: github.ref_type == 'branch' && startsWith(github.ref_name, 'feature/')
     runs-on: ubuntu-latest
     steps:
@@ -57,10 +57,16 @@ jobs:
           FEATURE_NAME="${{ steps.feature.outputs.feature_name }}"
 
           cat > "$CHANGELOG_FILE" << 'EOF'
-          <!-- 
+          <!--
           Changelog for feature: $FEATURE_NAME
           Author: ${{ github.actor }}
           Created: $(date +%Y-%m-%d)
+
+          ⚠️ IMPORTANT: Before committing, you MUST:
+          1. Fill out the sections below with your actual changes
+          2. DELETE any empty sections you don't use
+          3. DELETE the guidelines section at the bottom
+          4. DELETE empty bullet points (lines with just "- ")
           -->
 
           ### Added
@@ -78,12 +84,12 @@ jobs:
           - Configuration changes: 
           - Breaking changes: 
 
-          <!-- 
-          Guidelines:
+          <!--
+          📝 Guidelines (DELETE THIS ENTIRE SECTION before committing):
           - Use bullet points for each change
           - Be user-focused (what does this mean for users?)
           - Include technical details in "Technical Notes" section
-          - Remove unused sections before merging
+          - Remove unused sections
           - Follow Keep a Changelog format: https://keepachangelog.com/
           -->
           EOF
