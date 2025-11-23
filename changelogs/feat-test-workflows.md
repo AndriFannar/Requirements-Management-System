@@ -5,7 +5,7 @@ Created: $(date 2025-11-23)
 -->
 
 ### Added
-- 
+- Workflows for extracting and creating changelogs
 
 ### Changed
 - 
