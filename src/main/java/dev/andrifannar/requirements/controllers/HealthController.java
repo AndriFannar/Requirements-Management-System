@@ -19,4 +19,3 @@ public class HealthController {
         "Java Version", "25");
   }
 }
-// Hmm
