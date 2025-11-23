@@ -1,0 +1,132 @@
+name: Create Changelog Template
+
+on:
+  create:
+
+permissions:
+  contents: write
+
+jobs:
+  create-template:
+    # Only run on branch creation, not tag creation
+    if: github.ref_type == 'branch' && startsWith(github.ref_name, 'feature/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_CHANGELOG }}
+          ref: ${{ github.ref_name }}
+
+      - name: Extract feature name
+        id: feature
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          # Convert feature/user-auth to feat-user-auth
+          FEATURE_NAME=$(echo "$BRANCH" | sed 's|feature/|feat-|')
+          CHANGELOG_FILE="changelogs/${FEATURE_NAME}.md"
+
+          echo "feature_name=${FEATURE_NAME}" >> $GITHUB_OUTPUT
+          echo "changelog_file=${CHANGELOG_FILE}" >> $GITHUB_OUTPUT
+          echo "Feature: ${FEATURE_NAME}"
+          echo "Changelog: ${CHANGELOG_FILE}"
+
+      - name: Check if changelog already exists
+        id: check
+        run: |
+          CHANGELOG_FILE="${{ steps.feature.outputs.changelog_file }}"
+
+          if [ -f "$CHANGELOG_FILE" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Changelog already exists, skipping creation"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Changelog does not exist, will create"
+          fi
+
+      - name: Create changelog directory
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          mkdir -p changelogs
+          echo "Created changelogs directory"
+
+      - name: Create changelog template
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          CHANGELOG_FILE="${{ steps.feature.outputs.changelog_file }}"
+          FEATURE_NAME="${{ steps.feature.outputs.feature_name }}"
+
+          cat > "$CHANGELOG_FILE" << 'EOF'
+          <!-- 
+          Changelog for feature: $FEATURE_NAME
+          Author: ${{ github.actor }}
+          Created: $(date +%Y-%m-%d)
+          -->
+
+          ### Added
+          - 
+
+          ### Changed
+          - 
+
+          ### Fixed
+          - 
+
+          ### Technical Notes
+          - Database migrations: 
+          - New dependencies: 
+          - Configuration changes: 
+          - Breaking changes: 
+
+          <!-- 
+          Guidelines:
+          - Use bullet points for each change
+          - Be user-focused (what does this mean for users?)
+          - Include technical details in "Technical Notes" section
+          - Remove unused sections before merging
+          - Follow Keep a Changelog format: https://keepachangelog.com/
+          -->
+          EOF
+                    
+                    # Replace variables in template
+                    sed -i "s/\$FEATURE_NAME/${FEATURE_NAME}/g" "$CHANGELOG_FILE"
+                    sed -i "s/\$(date +%Y-%m-%d)/$(date +%Y-%m-%d)/g" "$CHANGELOG_FILE"
+                    
+                    echo "Created changelog template: ${CHANGELOG_FILE}"
+                    cat "$CHANGELOG_FILE"
+
+                - name: Commit changelog template
+                  if: steps.check.outputs.exists == 'false'
+                  run: |
+                    CHANGELOG_FILE="${{ steps.feature.outputs.changelog_file }}"
+                    
+                    git config user.name "github-actions[bot]"
+                    git config user.email "github-actions[bot]@users.noreply.github.com"
+                    
+                    git add "$CHANGELOG_FILE"
+                    git commit -m "chore: create changelog template for ${{ steps.feature.outputs.feature_name }}"
+                    git push origin ${{ github.ref_name }}
+                    
+                    echo "✅ Changelog template committed and pushed"
+
+                - name: Create issue comment (if running from issue)
+                  if: steps.check.outputs.exists == 'false' && github.event.issue
+                  uses: actions/github-script@v7
+                  with:
+                    script: |
+                      const file = '${{ steps.feature.outputs.changelog_file }}';
+                      const branch = '${{ github.ref_name }}';
+                      
+                      const body = `## 📝 Changelog Template Created\n\n` +
+                                  `A changelog template has been automatically created for this feature branch.\n\n` +
+                                  `**File:** \`${file}\`\n` +
+                                  `**Branch:** \`${branch}\`\n\n` +
+                                  `Please update the changelog as you develop this feature. ` +
+                                  `The changelog will be validated when you create a PR.`;
+                      
+                      github.rest.issues.createComment({
+                        issue_number: context.issue.number,
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        body: body
+                      });
