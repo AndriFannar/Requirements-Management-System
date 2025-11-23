@@ -3,8 +3,8 @@ name: Finalize Changelog for Release
 on:
   push:
     tags:
-      - 'v*'
-      - '!v*-rc*'  # Exclude pre-release tags
+      - "v*"
+      - "!v*-rc*" # Exclude pre-release tags
 
 permissions:
   contents: write
@@ -20,14 +20,14 @@ jobs:
           fetch-depth: 0
           ref: main
 
-      - name: Ensure tag is on main
+      - name: Ensure tag is on preprod
         run: |
-          git fetch origin main
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "❌ Tag ${{ github.ref_name }} must be on main branch"
+          git fetch origin preprod
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/preprod; then
+            echo "❌ Tag ${{ github.ref_name }} must be on preprod branch"
             exit 1
           fi
-          echo "✅ Tag is on main branch"
+          echo "✅ Tag is on preprod branch"
 
       - name: Extract version from tag
         id: version
@@ -35,7 +35,7 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           # Remove 'v' prefix for folder name (v1.1.0 -> 1.1.0)
           VERSION_NUMBER="${TAG#v}"
-          
+
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "version_number=${VERSION_NUMBER}" >> $GITHUB_OUTPUT
           echo "Release version: ${TAG}"
@@ -46,7 +46,7 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.tag }}"
           RC_VERSION="${VERSION}-rc"
-          
+
           if [ -f CHANGELOG.md ] && grep -q "^## ${RC_VERSION}" CHANGELOG.md; then
             echo "has_rc=true" >> $GITHUB_OUTPUT
             echo "rc_version=${RC_VERSION}" >> $GITHUB_OUTPUT
@@ -61,11 +61,11 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.tag }}"
           RC_VERSION="${{ steps.check_rc.outputs.rc_version }}"
-          
+
           echo "Updating ${RC_VERSION} -> ${VERSION} in CHANGELOG.md"
-          
+
           sed -i "s/^## ${RC_VERSION}/## ${VERSION}/" CHANGELOG.md
-          
+
           echo "✅ CHANGELOG.md updated"
           echo ""
           echo "Preview:"
@@ -75,9 +75,9 @@ jobs:
         if: steps.check_rc.outputs.has_rc == 'false'
         run: |
           VERSION="${{ steps.version.outputs.tag }}"
-          
+
           echo "No pre-release found, aggregating changelogs for final release..."
-          
+
           # Create temporary files for each section
           TEMP_DIR=$(mktemp -d)
           ADDED="${TEMP_DIR}/added.txt"
@@ -87,9 +87,9 @@ jobs:
           DEPRECATED="${TEMP_DIR}/deprecated.txt"
           SECURITY="${TEMP_DIR}/security.txt"
           TECHNICAL="${TEMP_DIR}/technical.txt"
-          
+
           touch "$ADDED" "$CHANGED" "$FIXED" "$REMOVED" "$DEPRECATED" "$SECURITY" "$TECHNICAL"
-          
+
           # Process each feature changelog
           FEATURE_COUNT=0
           for file in changelogs/feat-*.md; do
@@ -142,14 +142,14 @@ jobs:
               done < "$file"
             fi
           done
-          
+
           echo "Processed ${FEATURE_COUNT} feature changelog(s)"
-          
+
           # Build the aggregated changelog
           AGGREGATED="${TEMP_DIR}/aggregated.txt"
           echo "## ${VERSION}" > "$AGGREGATED"
           echo "" >> "$AGGREGATED"
-          
+
           [ -s "$ADDED" ] && { echo "### Added" >> "$AGGREGATED"; cat "$ADDED" >> "$AGGREGATED"; echo "" >> "$AGGREGATED"; }
           [ -s "$CHANGED" ] && { echo "### Changed" >> "$AGGREGATED"; cat "$CHANGED" >> "$AGGREGATED"; echo "" >> "$AGGREGATED"; }
           [ -s "$FIXED" ] && { echo "### Fixed" >> "$AGGREGATED"; cat "$FIXED" >> "$AGGREGATED"; echo "" >> "$AGGREGATED"; }
@@ -157,7 +157,7 @@ jobs:
           [ -s "$DEPRECATED" ] && { echo "### Deprecated" >> "$AGGREGATED"; cat "$DEPRECATED" >> "$AGGREGATED"; echo "" >> "$AGGREGATED"; }
           [ -s "$SECURITY" ] && { echo "### Security" >> "$AGGREGATED"; cat "$SECURITY" >> "$AGGREGATED"; echo "" >> "$AGGREGATED"; }
           [ -s "$TECHNICAL" ] && { echo "### Technical Notes" >> "$AGGREGATED"; cat "$TECHNICAL" >> "$AGGREGATED"; echo "" >> "$AGGREGATED"; }
-          
+
           # Update CHANGELOG.md
           if [ -f CHANGELOG.md ]; then
             TEMP_CHANGELOG="${TEMP_DIR}/new_changelog.md"
@@ -171,7 +171,7 @@ jobs:
             echo "" >> CHANGELOG.md
             cat "$AGGREGATED" >> CHANGELOG.md
           fi
-          
+
           rm -rf "$TEMP_DIR"
           echo "✅ Changelog aggregated"
 
@@ -180,10 +180,10 @@ jobs:
         run: |
           VERSION_NUMBER="${{ steps.version.outputs.version_number }}"
           ARCHIVE_DIR="changelogs/${VERSION_NUMBER}"
-          
+
           # Create archive directory
           mkdir -p "$ARCHIVE_DIR"
-          
+
           # Move all feature changelogs to archive
           ARCHIVED_COUNT=0
           for file in changelogs/feat-*.md; do
@@ -193,7 +193,7 @@ jobs:
               echo "Archived: $(basename "$file")"
             fi
           done
-          
+
           if [ $ARCHIVED_COUNT -eq 0 ]; then
             echo "⚠️  No feature changelogs to archive"
             rmdir "$ARCHIVE_DIR"
@@ -209,36 +209,36 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           git add CHANGELOG.md
-          
+
           if [ "${{ steps.archive.outputs.archived }}" = "true" ]; then
             git add changelogs/
             git commit -m "chore: finalize changelog and archive features for ${{ steps.version.outputs.tag }}"
           else
             git commit -m "chore: finalize changelog for ${{ steps.version.outputs.tag }}"
           fi
-          
+
           git push origin main
-          
+
           echo "✅ Changes committed and pushed to main"
 
       - name: Extract changelog for release body
         id: extract
         run: |
           VERSION="${{ steps.version.outputs.tag }}"
-          
+
           # Extract just this version's section
           TEMP_FILE=$(mktemp)
-          
+
           awk "/^## ${VERSION}/,/^## / {
             if (/^## / && !/^## ${VERSION}/) exit;
             if (!/^## ${VERSION}/) print;
           }" CHANGELOG.md > "$TEMP_FILE"
-          
+
           echo "Release body preview:"
           cat "$TEMP_FILE"
-          
+
           echo "body_file=${TEMP_FILE}" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
@@ -260,14 +260,14 @@ jobs:
             const archived = '${{ steps.archive.outputs.archived }}';
             const count = '${{ steps.archive.outputs.count }}';
             const archiveDir = '${{ steps.archive.outputs.archive_dir }}';
-            
+
             let summary = `# 🚀 Release ${version} Published\n\n`;
             summary += `✅ CHANGELOG.md updated\n`;
-            
+
             if (archived === 'true') {
               summary += `✅ ${count} feature changelog(s) archived to \`${archiveDir}\`\n`;
             }
-            
+
             summary += `✅ GitHub release created with combined changelog\n`;
-            
+
             core.summary.addRaw(summary).write();
