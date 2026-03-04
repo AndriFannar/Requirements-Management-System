@@ -4,7 +4,7 @@ on:
   push:
     tags:
       - "v*"
-      - "!v*-rc*" # Exclude pre-release tags
+      - "!v*-rc*"
 
 permissions:
   contents: write
@@ -20,14 +20,14 @@ jobs:
           fetch-depth: 0
           ref: main
 
-      - name: Ensure tag is on preprod
+      - name: Ensure tag is on main
         run: |
-          git fetch origin preprod
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/preprod; then
-            echo "❌ Tag ${{ github.ref_name }} must be on preprod branch"
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "❌ Tag ${{ github.ref_name }} must be on main branch"
             exit 1
           fi
-          echo "✅ Tag is on preprod branch"
+          echo "✅ Tag is on main branch"
 
       - name: Extract version from tag
         id: version
@@ -101,12 +101,7 @@ jobs:
               CURRENT_SECTION=""
               
               while IFS= read -r line; do
-                # Skip comments and empty lines
                 if [[ "$line" =~ ^[[:space:]]*$ ]] || [[ "$line" =~ ^\<\!-- ]]; then
-                  # If we hit the guidelines comment, stop processing this file
-                  if [[ "$line" =~ ^\<\!--[[:space:]]*Guidelines ]]; then
-                    break
-                  fi
                   continue
                 fi
                 
@@ -121,12 +116,6 @@ jobs:
                 fi
                 
                 if [[ "$line" =~ ^-[[:space:]]+ ]] && [[ -n "$CURRENT_SECTION" ]]; then
-                  # Skip bullet points that are empty or just whitespace after the dash
-                  CONTENT=$(echo "$line" | sed 's/^-[[:space:]]*//')
-                  if [[ -z "$CONTENT" ]]; then
-                    continue  # Skip empty bullet point
-                  fi
-                  
                   ATTRIBUTED_LINE="${line} *(${FEATURE_NAME})*"
                   
                   case "$CURRENT_SECTION" in
