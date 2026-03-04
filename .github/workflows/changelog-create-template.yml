@@ -8,7 +8,6 @@ permissions:
 
 jobs:
   create-template:
-    # Only run on feature branch creation, not tag creation
     if: github.ref_type == 'branch' && startsWith(github.ref_name, 'feature/')
     runs-on: ubuntu-latest
     steps:

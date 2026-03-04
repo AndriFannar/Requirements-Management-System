@@ -12,6 +12,7 @@ Created: $(date 2025-11-23)
 ### Technical Notes
 - New workflows in `.github/workflows/`
 - Requires PAT_CHANGELOG secret
+- Remember to look at [QUICKSTART](../docs/QUICKSTART.md) for instructions.
 
 <!-- 
 Guidelines:
