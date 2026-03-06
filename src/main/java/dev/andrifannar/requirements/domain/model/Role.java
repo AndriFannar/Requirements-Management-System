@@ -31,6 +31,10 @@ public class Role {
     this.name = name;
   }
 
+  public String getName() {
+    return this.name;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o)

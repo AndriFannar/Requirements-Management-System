@@ -2,8 +2,8 @@ package dev.andrifannar.requirements.domain.model;
 
 import java.time.Instant;
 import java.util.HashSet;
-import java.util.Set;
 import java.util.UUID;
+import java.util.Set;
 
 import jakarta.persistence.*;
 
@@ -106,6 +106,58 @@ public class User {
     this.publicId = UUID.randomUUID();
     this.createdAt = Instant.now();
     this.updatedAt = Instant.now();
+  }
+
+  public UUID getPublicId() {
+    return this.publicId;
+  }
+
+  public String getUsername() {
+    return this.username;
+  }
+
+  public String getEmail() {
+    return this.email;
+  }
+
+  public String getPassword() {
+    return this.password;
+  }
+
+  public String getFirstName() {
+    return this.firstName;
+  }
+
+  public String getLastName() {
+    return this.lastName;
+  }
+
+  public Set<Role> getRoles() {
+    return this.roles;
+  }
+
+  public boolean isAccountExpired() {
+    return this.accountExpired;
+  }
+
+  public boolean isLocked() {
+    return this.locked;
+  }
+
+  public boolean isCredentialsExpired() {
+    return this.credentialsExpired;
+  }
+
+  public boolean isEnabled() {
+    return this.enabled;
+  }
+
+  public void addRole(Role role) {
+    this.roles.add(role);
+  }
+
+  public Instant getCreatedAt() {
+    return this.createdAt;
   }
 
   @Override

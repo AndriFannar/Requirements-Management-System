@@ -1,4 +1,4 @@
-package dev.andrifannar.requirements.controllers;
+package dev.andrifannar.requirements.infrastructure.web;
 
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.GetMapping;
