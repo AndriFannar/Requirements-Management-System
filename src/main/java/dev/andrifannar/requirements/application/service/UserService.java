@@ -10,13 +10,14 @@ import org.springframework.stereotype.Service;
 import dev.andrifannar.requirements.domain.model.repository.UserRepository;
 import dev.andrifannar.requirements.domain.model.repository.RoleRepository;
 import dev.andrifannar.requirements.domain.model.User;
+import dev.andrifannar.requirements.domain.model.exception.ResourceAlreadyExistsException;
 import dev.andrifannar.requirements.domain.model.Role;
 
 /**
  * Application service for {@link User} management operations.
  * 
  * <p>
- * Orchestrates {@link User} creation, retreival, and profile updates.
+ * Orchestrates {@link User} creation, retrieval, and profile updates.
  * Delegates persistence to the {@link UserRepository} domain port.
  * </p>
  */
@@ -44,15 +45,16 @@ public class UserService {
    * @param email    the user's e-mail address.
    * @param password the plaintext password (will be hashed before storage).
    * @return the created user.
-   * @throws IllegalArgumentException if username or e-mail is already taken.
+   * @throws ResourceAlreadyExistsException if username or e-mail is already
+   *                                        taken.
    */
   @Transactional
   public User createUser(String username, String email, String password) {
     if (userRepository.existsByUsername(username)) {
-      throw new IllegalArgumentException("Username already taken: " + username);
+      throw new ResourceAlreadyExistsException("Username already taken: " + username);
     }
     if (userRepository.existsByEmail(email)) {
-      throw new IllegalArgumentException("E-Mail is already taken: " + email);
+      throw new ResourceAlreadyExistsException("E-Mail is already taken: " + email);
     }
 
     User user = new User(username, email, passwordEncoder.encode(password));
