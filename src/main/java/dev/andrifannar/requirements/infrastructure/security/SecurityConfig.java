@@ -1,12 +1,12 @@
 package dev.andrifannar.requirements.infrastructure.security;
 
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.context.annotation.Bean;
@@ -16,17 +16,18 @@ import org.springframework.http.HttpMethod;
  * Spring Security configuration.
  * 
  * <p>
- * Configures authentication, authorization rules, and security-related beans.
- * Currently uses HTTP Basic authentication which will be replaced with JWT.
+ * Configures JWT-based stateless authentication, authorization rules,
+ * and security-related beans.
  * </p>
  */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
-  @Bean
-  public PasswordEncoder passqEncoder() {
-    return new BCryptPasswordEncoder();
+  private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+  public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+    this.jwtAuthenticationFilter = jwtAuthenticationFilter;
   }
 
   @Bean
@@ -41,11 +42,19 @@ public class SecurityConfig {
         .csrf(csrf -> csrf.disable())
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth -> auth
+            .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
             .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
             .requestMatchers("/api/health").permitAll()
             .anyRequest().authenticated())
-        .httpBasic(basic -> {
-        })
+        .exceptionHandling(exceptions -> exceptions
+            .authenticationEntryPoint((request, response, authExceptions) -> {
+              response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_UNAUTHORIZED);
+              response.setContentType("application/json");
+              response.getWriter().write(
+                  "{\"status\":401,\"error\":\"Unauthorized\",\"message\":\"Authentication required\"}");
+            }))
+        .addFilterBefore(jwtAuthenticationFilter,
+            UsernamePasswordAuthenticationFilter.class)
         .build();
   }
 }

@@ -7,10 +7,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 
+import dev.andrifannar.requirements.domain.model.exception.ResourceAlreadyExistsException;
 import dev.andrifannar.requirements.domain.model.repository.UserRepository;
 import dev.andrifannar.requirements.domain.model.repository.RoleRepository;
 import dev.andrifannar.requirements.domain.model.User;
-import dev.andrifannar.requirements.domain.model.exception.ResourceAlreadyExistsException;
 import dev.andrifannar.requirements.domain.model.Role;
 
 /**
